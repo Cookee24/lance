@@ -8,10 +8,14 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+#[cfg(feature = "cloud-oss")]
+use std::time::SystemTime;
 
 use async_trait::async_trait;
+#[cfg(feature = "cloud-oss")]
 use aws_config::default_provider::credentials::DefaultCredentialsChain;
+#[cfg(feature = "cloud-oss")]
 use aws_credential_types::provider::ProvideCredentials;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -19,21 +23,27 @@ use deepsize::DeepSizeOf;
 use futures::{future, stream::BoxStream, StreamExt, TryStreamExt};
 use lance_core::utils::parse::str_is_truthy;
 use lance_core::utils::tokio::get_num_compute_intensive_cpus;
+#[cfg(feature = "cloud-oss")]
 use object_store::aws::{
     AmazonS3ConfigKey, AwsCredential as ObjectStoreAwsCredential, AwsCredentialProvider,
 };
+#[cfg(feature = "cloud-oss")]
 use object_store::gcp::{GcpCredential, GoogleCloudStorageBuilder};
+#[cfg(feature = "cloud-oss")]
 use object_store::{
-    aws::AmazonS3Builder, azure::AzureConfigKey, gcp::GoogleConfigKey, local::LocalFileSystem,
-    memory::InMemory, CredentialProvider, Error as ObjectStoreError, Result as ObjectStoreResult,
+    aws::AmazonS3Builder, azure::AzureConfigKey, gcp::GoogleConfigKey, CredentialProvider,
+    Result as ObjectStoreResult,
 };
 use object_store::{
-    parse_url_opts, ClientOptions, DynObjectStore, RetryConfig, StaticCredentialProvider,
+    local::LocalFileSystem, memory::InMemory, DynObjectStore, Error as ObjectStoreError,
 };
+#[cfg(feature = "cloud-oss")]
+use object_store::{parse_url_opts, ClientOptions, RetryConfig, StaticCredentialProvider};
 use object_store::{path::Path, ObjectMeta, ObjectStore as OSObjectStore};
 use shellexpand::tilde;
 use snafu::location;
 use tokio::io::AsyncWriteExt;
+#[cfg(feature = "cloud-oss")]
 use tokio::sync::RwLock;
 use url::Url;
 
@@ -142,9 +152,11 @@ impl ObjectStoreRegistry {
     }
 }
 
+#[cfg(feature = "cloud-oss")]
 const AWS_CREDS_CACHE_KEY: &str = "aws_credentials";
 
 /// Adapt an AWS SDK cred into object_store credentials
+#[cfg(feature = "cloud-oss")]
 #[derive(Debug)]
 pub struct AwsCredentialAdapter {
     pub inner: Arc<dyn ProvideCredentials>,
@@ -156,6 +168,7 @@ pub struct AwsCredentialAdapter {
     credentials_refresh_offset: Duration,
 }
 
+#[cfg(feature = "cloud-oss")]
 impl AwsCredentialAdapter {
     pub fn new(
         provider: Arc<dyn ProvideCredentials>,
@@ -170,6 +183,7 @@ impl AwsCredentialAdapter {
 }
 
 #[async_trait]
+#[cfg(feature = "cloud-oss")]
 impl CredentialProvider for AwsCredentialAdapter {
     type Credential = ObjectStoreAwsCredential;
 
@@ -231,6 +245,7 @@ impl CredentialProvider for AwsCredentialAdapter {
 /// 2. (If endpoint is not set), the region returned by the S3 API for the bucket
 ///
 /// It can return None if no region is provided and the endpoint is set.
+#[cfg(feature = "cloud-oss")]
 async fn resolve_s3_region(
     url: &Url,
     storage_options: &HashMap<AmazonS3ConfigKey, String>,
@@ -271,6 +286,7 @@ async fn resolve_s3_region(
 /// 3. The default credential provider chain from AWS SDK.
 ///
 /// `credentials_refresh_offset` is the amount of time before expiry to refresh credentials.
+#[cfg(feature = "cloud-oss")]
 pub async fn build_aws_credential(
     credentials_refresh_offset: Duration,
     credentials: Option<AwsCredentialProvider>,
@@ -309,6 +325,7 @@ pub async fn build_aws_credential(
     }
 }
 
+#[cfg(feature = "cloud-oss")]
 fn extract_static_s3_credentials(
     options: &HashMap<AmazonS3ConfigKey, String>,
 ) -> Option<StaticCredentialProvider<ObjectStoreAwsCredential>> {
@@ -344,6 +361,7 @@ pub struct ObjectStoreParams {
     pub block_size: Option<usize>,
     pub object_store: Option<(Arc<DynObjectStore>, Url)>,
     pub s3_credentials_refresh_offset: Duration,
+    #[cfg(feature = "cloud-oss")]
     pub aws_credentials: Option<AwsCredentialProvider>,
     pub object_store_wrapper: Option<Arc<dyn WrappingObjectStore>>,
     pub storage_options: Option<HashMap<String, String>>,
@@ -361,6 +379,7 @@ impl Default for ObjectStoreParams {
             object_store: None,
             block_size: None,
             s3_credentials_refresh_offset: Duration::from_secs(60),
+            #[cfg(feature = "cloud-oss")]
             aws_credentials: None,
             object_store_wrapper: None,
             storage_options: None,
@@ -373,10 +392,11 @@ impl Default for ObjectStoreParams {
 impl ObjectStoreParams {
     /// Create a new instance of [`ObjectStoreParams`] based on the AWS credentials.
     pub fn with_aws_credentials(
-        aws_credentials: Option<AwsCredentialProvider>,
+        #[cfg(feature = "cloud-oss")] aws_credentials: Option<AwsCredentialProvider>,
         region: Option<String>,
     ) -> Self {
         Self {
+            #[cfg(feature = "cloud-oss")]
             aws_credentials,
             storage_options: region
                 .map(|region| [("region".into(), region)].iter().cloned().collect()),
@@ -733,6 +753,7 @@ impl StorageOptions {
     }
 
     /// Add values from the environment to storage options
+    #[cfg(feature = "cloud-oss")]
     pub fn with_env_azure(&mut self) {
         for (os_key, os_value) in std::env::vars_os() {
             if let (Some(key), Some(value)) = (os_key.to_str(), os_value.to_str()) {
@@ -747,6 +768,7 @@ impl StorageOptions {
     }
 
     /// Add values from the environment to storage options
+    #[cfg(feature = "cloud-oss")]
     pub fn with_env_gcs(&mut self) {
         for (os_key, os_value) in std::env::vars_os() {
             if let (Some(key), Some(value)) = (os_key.to_str(), os_value.to_str()) {
@@ -761,6 +783,7 @@ impl StorageOptions {
     }
 
     /// Add values from the environment to storage options
+    #[cfg(feature = "cloud-oss")]
     pub fn with_env_s3(&mut self) {
         for (os_key, os_value) in std::env::vars_os() {
             if let (Some(key), Some(value)) = (os_key.to_str(), os_value.to_str()) {
@@ -809,6 +832,7 @@ impl StorageOptions {
     }
 
     /// Subset of options relevant for azure storage
+    #[cfg(feature = "cloud-oss")]
     pub fn as_azure_options(&self) -> HashMap<AzureConfigKey, String> {
         self.0
             .iter()
@@ -820,6 +844,7 @@ impl StorageOptions {
     }
 
     /// Subset of options relevant for s3 storage
+    #[cfg(feature = "cloud-oss")]
     pub fn as_s3_options(&self) -> HashMap<AmazonS3ConfigKey, String> {
         self.0
             .iter()
@@ -831,6 +856,7 @@ impl StorageOptions {
     }
 
     /// Subset of options relevant for gcs storage
+    #[cfg(feature = "cloud-oss")]
     pub fn as_gcs_options(&self) -> HashMap<GoogleConfigKey, String> {
         self.0
             .iter()
@@ -866,6 +892,7 @@ async fn configure_store(
     let file_block_size = options.block_size.unwrap_or(4 * 1024);
     let cloud_block_size = options.block_size.unwrap_or(64 * 1024);
     match url.scheme() {
+        #[cfg(feature = "cloud-oss")]
         "s3" | "s3+ddb" => {
             storage_options.with_env_s3();
 
@@ -936,6 +963,7 @@ async fn configure_store(
                 download_retry_count,
             })
         }
+        #[cfg(feature = "cloud-oss")]
         "gs" => {
             storage_options.with_env_gcs();
             let mut builder = GoogleCloudStorageBuilder::new().with_url(url.as_ref());
@@ -963,6 +991,7 @@ async fn configure_store(
                 download_retry_count,
             })
         }
+        #[cfg(feature = "cloud-oss")]
         "az" => {
             storage_options.with_env_azure();
             let (store, _) = parse_url_opts(&url, storage_options.as_azure_options())?;
@@ -1389,6 +1418,7 @@ mod tests {
     }
 
     #[async_trait]
+    #[cfg(feature = "cloud-oss")]
     impl CredentialProvider for MockAwsCredentialsProvider {
         type Credential = ObjectStoreAwsCredential;
 
@@ -1408,6 +1438,7 @@ mod tests {
         let registry = Arc::new(ObjectStoreRegistry::default());
 
         let params = ObjectStoreParams {
+            #[cfg(feature = "cloud-oss")]
             aws_credentials: Some(mock_provider.clone() as AwsCredentialProvider),
             ..ObjectStoreParams::default()
         };

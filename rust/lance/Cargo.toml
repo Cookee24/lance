@@ -44,8 +44,8 @@ deepsize.workspace = true
 # matches arrow-rs use
 half.workspace = true
 itertools.workspace = true
-object_store = { workspace = true, features = ["aws", "gcp", "azure"] }
-aws-credential-types.workspace = true
+object_store.workspace = true
+aws-credential-types = { workspace = true, optional = true }
 pin-project.workspace = true
 prost.workspace = true
 prost-types.workspace = true
@@ -117,6 +117,7 @@ protoc = [
     "lance-index/protoc",
     "lance-table/protoc",
 ]
+cloud-oss = ["aws-credential-types"]
 
 [[bin]]
 name = "lq"

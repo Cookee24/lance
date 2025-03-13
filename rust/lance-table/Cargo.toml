@@ -22,7 +22,7 @@ arrow-buffer.workspace = true
 arrow-ipc.workspace = true
 arrow-schema.workspace = true
 async-trait.workspace = true
-aws-credential-types.workspace = true
+aws-credential-types = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 byteorder.workspace = true
 bytes.workspace = true
@@ -62,6 +62,7 @@ protobuf-src = { version = "2.1", optional = true }
 [features]
 dynamodb = ["aws-sdk-dynamodb", "lazy_static"]
 protoc = ["dep:protobuf-src"]
+cloud-oss = ["aws-credential-types"]
 
 [package.metadata.docs.rs]
 # docs.rs uses an older version of Ubuntu that does not have the necessary protoc version
